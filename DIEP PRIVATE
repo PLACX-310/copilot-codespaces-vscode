@@ -1,0 +1,84 @@
+// Create a WebSocket connection to the server
+const socket = new WebSocket('ws://localhost:3000');
+
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+document.body.appendChild(canvas);
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Player and game state
+const player = { id: null, x: Math.random() * canvas.width, y: Math.random() * canvas.height, color: `#${Math.floor(Math.random()*16777215).toString(16)}` };
+let players = {}; // Other players
+let roomId = null;
+
+// Helper functions
+function drawPlayer(player) {
+    ctx.fillStyle = player.color;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function renderGame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Draw all players
+    for (let id in players) {
+        drawPlayer(players[id]);
+    }
+}
+
+// WebSocket events
+socket.onopen = () => {
+    console.log('Connected to server');
+};
+
+socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'update') {
+        players = data.players;
+    } else if (data.type === 'init') {
+        player.id = data.id;
+        roomId = data.roomId;
+        console.log(`Joined room ${roomId}`);
+    }
+};
+
+// Handle keyboard input for movement
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowUp') player.y -= 10;
+    if (event.key === 'ArrowDown') player.y += 10;
+    if (event.key === 'ArrowLeft') player.x -= 10;
+    if (event.key === 'ArrowRight') player.x += 10;
+
+    // Send updated position to server
+    socket.send(JSON.stringify({ type: 'move', player }));
+});
+
+// Allow creating/joining rooms
+const roomInput = document.createElement('input');
+roomInput.placeholder = 'Enter room ID';
+document.body.appendChild(roomInput);
+
+const joinButton = document.createElement('button');
+joinButton.textContent = 'Join Room';
+joinButton.onclick = () => {
+    const roomId = roomInput.value;
+    socket.send(JSON.stringify({ type: 'join', roomId }));
+};
+document.body.appendChild(joinButton);
+
+const createButton = document.createElement('button');
+createButton.textContent = 'Create Room';
+createButton.onclick = () => {
+    socket.send(JSON.stringify({ type: 'create' }));
+};
+document.body.appendChild(createButton);
+
+// Game loop
+function gameLoop() {
+    renderGame();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
